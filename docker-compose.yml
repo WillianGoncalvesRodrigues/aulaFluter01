@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  flutter:
+    build: .
+    container_name: flutter_app
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+    command: ["flutter", "run", "-d", "web-server", "--web-port", "8080"]
