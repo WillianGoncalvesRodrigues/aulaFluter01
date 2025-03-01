@@ -12,3 +12,4 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+android/gradle/Oracle_JDK-23.jdk/

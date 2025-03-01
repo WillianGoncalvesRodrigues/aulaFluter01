@@ -1,191 +1,60 @@
-import 'package:flutter/material.dart';
-import 'package:correct_package/database_helper.dart';
-import 'package:correct_package/contato.dart'; // Verifique o caminho correto para contato.dart
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
-void main() {
-  runApp(const ContactApp());
-}
+import 'contato.dart';
 
-class ContactApp extends StatelessWidget {
-  const ContactApp({super.key});
+class DatabaseHelper {
+  static final DatabaseHelper instance = DatabaseHelper._init();
+  static Database? _database;
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Lista de Contatos',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const ContactListScreen(),
-    );
-  }
-}
+  DatabaseHelper._init();
 
-class ContactListScreen extends StatefulWidget {
-  const ContactListScreen({super.key});
-
-  @override
-  State<ContactListScreen> createState() => _ContactListScreenState();
-}
-
-class _ContactListScreenState extends State<ContactListScreen> {
-  final DatabaseHelper dbHelper = DatabaseHelper.instance;
-  List<Contact> contacts = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadContacts();
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB('contacts.db');
+    return _database!;
   }
 
-  Future<void> _loadContacts() async {
-    try {
-      final loadedContacts = await dbHelper.getContacts();
-      setState(() {
-        contacts = loadedContacts;
-      });
-    } catch (e) {
-      debugPrint("Erro ao carregar contatos: $e");
-    }
+  Future<Database> _initDB(String fileName) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, fileName);
+
+    return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
-  void _addContact() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        final nameController = TextEditingController();
-        final phoneController = TextEditingController();
+  Future<void> _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL
+      )
+    ''');
+  }
 
-        return AlertDialog(
-          title: const Text('Adicionar Contato'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nome'),
-              ),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Telefone'),
-                keyboardType: TextInputType.phone,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
-                  final newContact = Contact(
-                    name: nameController.text,
-                    phone: phoneController.text,
-                  );
-                  await dbHelper.insertContact(newContact);
-                  _loadContacts();
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Salvar'),
-            ),
-          ],
-        );
-      },
+  Future<int> insertContact(Contact contact) async {
+    final db = await database;
+    return await db.insert('contacts', contact.toMap());
+  }
+
+  Future<List<Contact>> getContacts() async {
+    final db = await database;
+    final result = await db.query('contacts');
+    return result.map((map) => Contact.fromMap(map)).toList();
+  }
+
+  Future<int> updateContact(Contact contact) async {
+    final db = await database;
+    return await db.update(
+      'contacts',
+      contact.toMap(),
+      where: 'id = ?',
+      whereArgs: [contact.id],
     );
   }
 
-  void _deleteContact(int? id) async {
-    if (id != null) {
-      await dbHelper.deleteContact(id);
-      _loadContacts();
-    }
-  }
-
-  void _editContact(Contact contact) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        final nameController = TextEditingController(text: contact.name);
-        final phoneController = TextEditingController(text: contact.phone);
-
-        return AlertDialog(
-          title: const Text('Editar Contato'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nome'),
-              ),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Telefone'),
-                keyboardType: TextInputType.phone,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
-                  final updatedContact = Contact(
-                    id: contact.id,
-                    name: nameController.text,
-                    phone: phoneController.text,
-                  );
-                  await dbHelper.updateContact(updatedContact);
-                  _loadContacts();
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Salvar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Lista de Contatos')),
-      body: contacts.isEmpty
-          ? const Center(child: Text('Nenhum contato encontrado.'))
-          : ListView.builder(
-              itemCount: contacts.length,
-              itemBuilder: (context, index) {
-                final contact = contacts[index];
-
-                return ListTile(
-                  title: Text(contact.name),
-                  subtitle: Text(contact.phone),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _editContact(contact),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteContact(contact.id),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addContact,
-        child: const Icon(Icons.add),
-      ),
-    );
+  Future<int> deleteContact(int id) async {
+    final db = await database;
+    return await db.delete('contacts', where: 'id = ?', whereArgs: [id]);
   }
 }
