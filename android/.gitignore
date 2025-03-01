@@ -12,4 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Evita envio do JDK
 android/gradle/Oracle_JDK-23.jdk/
